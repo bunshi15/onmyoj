@@ -7,11 +7,14 @@ dependencies = [
     "httpx<0.28",
     "requests",
     "google-api-python-client",
-    "load_dotenv",
-    "aiosqlite"
+    "python-dotenv",
+    "aiosqlite",
+    "pytest"
 ]
 
 
 [build-system]
 requires = ["uv"]
 build-backend = "uv.build"
+
+[tool.pytest.ini_options]
