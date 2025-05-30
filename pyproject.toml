@@ -1,0 +1,17 @@
+[project]
+name = "onmyoj"
+version = "0.1.0"
+description = "Malware OSINT and video analysis tool"
+dependencies = [
+    "youtube-search-python>=1.6.6",
+    "httpx<0.28",
+    "requests",
+    "google-api-python-client",
+    "load_dotenv",
+    "aiosqlite"
+]
+
+
+[build-system]
+requires = ["uv"]
+build-backend = "uv.build"
