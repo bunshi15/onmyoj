@@ -1,10 +1,12 @@
 import os
 import asyncio
 import uuid
+import typer
 
 from dotenv import load_dotenv
 from googleapiclient.errors import HttpError
 
+from modules import db_cli
 from modules.youtube_scraper import search_videos, extract_contacts, get_video_comments
 from modules.yt_ch_scraper import get_channel_info
 from modules.save_report import (
@@ -19,6 +21,54 @@ API_KEY = os.getenv("API_KEY")
 
 # Глобальная переменная для пути к БД
 DB_PATH = "onmyoj.db"
+
+app = typer.Typer()
+
+@app.command()
+def collect(query: str = None):
+    """Собрать и сохранить данные по запросу"""
+    asyncio.run(main_collect(query))
+
+@app.command()
+def list_sessions():
+    """Показать список сессий"""
+    db_cli.list_sessions()
+
+@app.command()
+def use_session(session_id: int):
+    """Выбрать сессию активной"""
+    db_cli.use_session(session_id)
+
+@app.command()
+def show_videos(limit: int =  typer.Option(10), session_id: int = None):
+    db_cli.show_videos(limit=limit, session_id=session_id)
+
+@app.command()
+def show_channels(limit: int =  typer.Option(10), min_subs: int = typer.Option(0), session_id: int = None):
+    db_cli.show_channels(limit=limit, min_subs=min_subs, session_id=session_id)
+
+@app.command()
+def search_contacts(
+        contact_type: str = None,
+        search_term: str = None,
+        source: str = typer.Option("all"),  # 'all', 'video', 'comment', 'channel'
+        limit: int =  typer.Option(20),
+        session_id: int = None):
+    db_cli.search_contacts(contact_type=contact_type, search_term=search_term, source=source, limit=limit, session_id=session_id)
+
+@app.command()
+def analyze_channels(session_id: int = None):
+    db_cli.analyze_channels(session_id=session_id)
+
+@app.command()
+def export_report(fmt: str = typer.Option("html")):
+    db_cli.export_report(fmt=fmt)
+
+@app.command()
+def quicksearch(query: str = None):
+    """Собрать и сразу показать статистику по запросу"""
+    asyncio.run(main_collect(query))
+    db_cli.stats()
 
 async def process_channel(channel_id, session_id):
     """Обработка канала"""
@@ -93,13 +143,11 @@ async def process_video(session_id, video_data):
         import traceback
         traceback.print_exc()
 
-async def main():
+async def main_collect(query):
     """Главная функция"""
     # Проверяем текущую директорию
-    import os
     print(f"Текущая директория: {os.getcwd()}")
-    db_path = "onmyoj.db"
-    print(f"Путь к БД: {os.path.abspath(db_path)}")
+    print(f"Путь к БД: {os.path.abspath(DB_PATH)}")
 
     # Инициализируем базу данных
     await init_db(DB_PATH)
@@ -111,15 +159,12 @@ async def main():
     else:
         print("ОШИБКА: Файл БД не создан!")
 
-    # Поисковый запрос - ИЗМЕНИТЕ НА СВОЙ
-    search_query = "xworm Vbs Crypter Fud Bypass Windows Defender EXE Payload"  # Замените на нужный запрос
-
-    import uuid
     comment = str(uuid.uuid4())
-    session_id = await create_session(search_query, comment=comment, db_path=DB_PATH)
+    session_id = await create_session(query, comment=comment, db_path=DB_PATH)
     # Ищем видео
-    print(f"\nПоиск видео по запросу: '{search_query}'")
-    results = search_videos(search_query, limit=10)
+    print(f"\nНачата сессия: {session_id} '{comment}'")
+    print(f"\nПоиск видео по запросу: '{query}'")
+    results = search_videos(query, limit=10)
     print(f"Найдено видео: {len(results)}")
 
     if not results:
@@ -138,6 +183,8 @@ async def main():
 
     print(f"\nОбработка завершена. Обработано видео: {len(results)}")
 
+    db_cli.set_current_session(session_id)
+    print(f"\nСохранено. текущая сессия: session_id:{session_id} '{comment}'")
+
 if __name__ == "__main__":
-    # Запускаем асинхронную функцию
-    asyncio.run(main())
+    app()
