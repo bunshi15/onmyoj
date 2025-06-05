@@ -47,6 +47,7 @@ def current_session():
         "SELECT session_id, started_at, keyword, comment FROM sessions WHERE session_id = ?",
         conn, params=(session_id,))
     print(df)
+    return df
     conn.close()
 
 @app.command()
@@ -213,19 +214,6 @@ def analyze_channels(session_id: int = None):
     for row in c.fetchall():
         print(f"{row[0]}: {row[1]} подписчиков, {row[2]} видео")
 
-    conn.close()
-
-@app.command()
-def export_report(fmt: str = "html"):
-    """Экспорт отчёта по видео (html/csv)"""
-    conn = get_conn()
-    df = pd.read_sql_query("SELECT * FROM videos", conn)
-    if fmt == "html":
-        df.to_html("report.html", index=False)
-        print("Сохранено в report.html")
-    elif fmt == "csv":
-        df.to_csv("report.csv", index=False)
-        print("Сохранено в report.csv")
     conn.close()
 
 if __name__ == "__main__":

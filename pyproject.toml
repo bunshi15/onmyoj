@@ -12,7 +12,8 @@ dependencies = [
     "pytest",
     "typer",
     "pandas",
-    "uuid"
+    "uuid",
+    "tabulate"
 ]
 
 

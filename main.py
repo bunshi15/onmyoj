@@ -6,7 +6,7 @@ import typer
 from dotenv import load_dotenv
 from googleapiclient.errors import HttpError
 
-from modules import db_cli
+from modules import db_cli, report_export
 from modules.youtube_scraper import search_videos, extract_contacts, get_video_comments
 from modules.yt_ch_scraper import get_channel_info
 from modules.save_report import (
@@ -61,8 +61,17 @@ def analyze_channels(session_id: int = None):
     db_cli.analyze_channels(session_id=session_id)
 
 @app.command()
-def export_report(fmt: str = typer.Option("html")):
-    db_cli.export_report(fmt=fmt)
+def export_report(fmt: str = typer.Option("md"), out_path: str = None):
+    """Экспорт отчёта по видео (md/html/csv)"""
+    session_info = db_cli.current_session()
+    if session_info is None or len(session_info) == 0:
+        print("Нет активной сессии.")
+        return
+    if not out_path:
+        print(f"Current folder: {os.getcwd()}")
+        out_path = os.getcwd() + '/report.' + fmt
+        print(f"Path to report: {out_path}")
+    report_export.export_session_report(session_info, db_path=DB_PATH, fmt=fmt, out_path=out_path)
 
 @app.command()
 def quicksearch(query: str = None):
