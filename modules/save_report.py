@@ -26,10 +26,20 @@ async def close_db():
 async def init_db(db_path="onmyoj.db"):
     """Инициализация базы данных"""
     async with get_db(db_path) as db:
+        await db.execute("""
+                         CREATE TABLE IF NOT EXISTS sessions (
+                                                                 session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                                                 started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                                                                 keyword TEXT,
+                                                                 comment TEXT
+                         )
+                         """)
+
         # Таблица видео
         await db.execute("""
                          CREATE TABLE IF NOT EXISTS videos (
                                                                video_id TEXT PRIMARY KEY,
+                                                               session_id INTEGER,
                                                                title TEXT,
                                                                url TEXT,
                                                                channel_name TEXT,
@@ -37,7 +47,8 @@ async def init_db(db_path="onmyoj.db"):
                                                                published_time TEXT,
                                                                view_count TEXT,
                                                                duration TEXT,
-                                                               description_snippet TEXT
+                                                               description_snippet TEXT,
+                                                               FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                          )
                          """)
 
@@ -46,9 +57,11 @@ async def init_db(db_path="onmyoj.db"):
                          CREATE TABLE IF NOT EXISTS video_contacts (
                                                                        id INTEGER PRIMARY KEY AUTOINCREMENT,
                                                                        video_id TEXT,
+                                                                       session_id INTEGER,
                                                                        contact_type TEXT,
                                                                        value TEXT,
-                                                                       FOREIGN KEY(video_id) REFERENCES videos(video_id)
+                                                                       FOREIGN KEY(video_id) REFERENCES videos(video_id),
+                                                                       FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                              )
                          """)
 
@@ -56,6 +69,7 @@ async def init_db(db_path="onmyoj.db"):
         await db.execute("""
                          CREATE TABLE IF NOT EXISTS channels (
                                                                  channel_id TEXT PRIMARY KEY,
+                                                                 session_id INTEGER,
                                                                  title TEXT,
                                                                  description TEXT,
                                                                  published_at TEXT,
@@ -63,7 +77,8 @@ async def init_db(db_path="onmyoj.db"):
                                                                  view_count TEXT,
                                                                  subscriber_count TEXT,
                                                                  video_count TEXT,
-                                                                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                                                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                                                 FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                          )
                          """)
 
@@ -72,9 +87,11 @@ async def init_db(db_path="onmyoj.db"):
                          CREATE TABLE IF NOT EXISTS comments (
                                                                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                                                                  video_id TEXT,
+                                                                 session_id INTEGER,
                                                                  author TEXT,
                                                                  comment TEXT,
-                                                                 FOREIGN KEY(video_id) REFERENCES videos(video_id)
+                                                                 FOREIGN KEY(video_id) REFERENCES videos(video_id),
+                                                                 FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                              )
                          """)
 
@@ -83,9 +100,11 @@ async def init_db(db_path="onmyoj.db"):
                          CREATE TABLE IF NOT EXISTS comment_contacts (
                                                                          id INTEGER PRIMARY KEY AUTOINCREMENT,
                                                                          comment_id INTEGER,
+                                                                         session_id INTEGER,
                                                                          contact_type TEXT,
                                                                          value TEXT,
-                                                                         FOREIGN KEY(comment_id) REFERENCES comments(id)
+                                                                         FOREIGN KEY(comment_id) REFERENCES comments(id),
+                                                                         FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                              )
                          """)
 
@@ -94,25 +113,28 @@ async def init_db(db_path="onmyoj.db"):
                          CREATE TABLE IF NOT EXISTS channel_contacts (
                                                                          id INTEGER PRIMARY KEY AUTOINCREMENT,
                                                                          channel_id TEXT,
+                                                                         session_id INTEGER,
                                                                          contact_type TEXT,
                                                                          value TEXT,
-                                                                         FOREIGN KEY(channel_id) REFERENCES channels(channel_id)
+                                                                         FOREIGN KEY(channel_id) REFERENCES channels(channel_id),
+                                                                         FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                              )
                          """)
 
         await db.commit()
 
-async def save_video(video, db_path="onmyoj.db"):
+async def save_video(video, session_id, db_path="onmyoj.db"):
     """Сохранение информации о видео"""
     async with get_db(db_path) as db:
         await db.execute("""
             INSERT OR REPLACE INTO videos (
-                video_id, title, url, channel_name, channel_id,
+                video_id, session_id, title, url, channel_name, channel_id,
                 published_time, view_count, duration, description_snippet
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             video['video_id'],
+            session_id,
             video['title'],
             video['url'],
             video['channel_name'],
@@ -124,45 +146,46 @@ async def save_video(video, db_path="onmyoj.db"):
         ))
         await db.commit()
 
-async def save_contact(video_id, contact_type, value, db_path="onmyoj.db"):
+async def save_contact(video_id, session_id, contact_type, value, db_path="onmyoj.db"):
     """Сохранение контакта из описания видео"""
     async with get_db(db_path) as db:
         await db.execute("""
-                         INSERT INTO video_contacts (video_id, contact_type, value)
-                         VALUES (?, ?, ?)
-                         """, (video_id, contact_type, value))
+                         INSERT INTO video_contacts (video_id, session_id, contact_type, value)
+                         VALUES (?, ?, ?, ?)
+                         """, (video_id, session_id, contact_type, value))
         await db.commit()
 
-async def save_comment(video_id, author, comment_text, db_path="onmyoj.db"):
+async def save_comment(video_id, session_id, author, comment_text, db_path="onmyoj.db"):
     """Сохранение комментария и возврат его ID"""
     async with get_db(db_path) as db:
         cursor = await db.execute("""
-                                  INSERT INTO comments (video_id, author, comment)
-                                  VALUES (?, ?, ?)
-                                  """, (video_id, author, comment_text))
+                                  INSERT INTO comments (video_id, session_id, author, comment)
+                                  VALUES (?, ?, ?, ?)
+                                  """, (video_id, session_id, author, comment_text))
         await db.commit()
         return cursor.lastrowid
 
-async def save_comment_contact(comment_id, contact_type, value, db_path="onmyoj.db"):
+async def save_comment_contact(comment_id, session_id, contact_type, value, db_path="onmyoj.db"):
     """Сохранение контакта из комментария"""
     async with get_db(db_path) as db:
         await db.execute("""
-                         INSERT INTO comment_contacts (comment_id, contact_type, value)
-                         VALUES (?, ?, ?)
-                         """, (comment_id, contact_type, value))
+                         INSERT INTO comment_contacts (comment_id, session_id, contact_type, value)
+                         VALUES (?, ?, ?, ?)
+                         """, (comment_id, session_id, contact_type, value))
         await db.commit()
 
-async def save_channel(channel_info, db_path="onmyoj.db"):
+async def save_channel(channel_info, session_id, db_path="onmyoj.db"):
     """Сохранение информации о канале"""
     async with get_db(db_path) as db:
         await db.execute("""
             INSERT OR REPLACE INTO channels (
-                channel_id, title, description, published_at, 
+                channel_id, session_id, title, description, published_at, 
                 country, view_count, subscriber_count, video_count
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             channel_info['channel_id'],
+            session_id,
             channel_info['title'],
             channel_info['description'],
             channel_info['published_at'],
@@ -173,11 +196,23 @@ async def save_channel(channel_info, db_path="onmyoj.db"):
         ))
         await db.commit()
 
-async def save_channel_contact(channel_id, contact_type, value, db_path="onmyoj.db"):
+async def save_channel_contact(channel_id, session_id, contact_type, value, db_path="onmyoj.db"):
     """Сохранение контакта из описания канала"""
     async with get_db(db_path) as db:
         await db.execute("""
-                         INSERT INTO channel_contacts (channel_id, contact_type, value)
-                         VALUES (?, ?, ?)
-                         """, (channel_id, contact_type, value))
+                         INSERT INTO channel_contacts (channel_id, session_id, contact_type, value)
+                         VALUES (?, ?, ?, ?)
+                         """, (channel_id, session_id, contact_type, value))
         await db.commit()
+
+async def create_session(keyword, comment=None, db_path="onmyoj.db"):
+    import datetime
+    started_at = datetime.datetime.utcnow().isoformat()
+    async with get_db(db_path) as db:
+        cur = await db.execute(
+            "INSERT INTO sessions (started_at, keyword, comment) VALUES (?, ?, ?)",
+            (started_at, keyword, comment or "")
+        )
+        await db.commit()
+        session_id = cur.lastrowid
+    return session_id
