@@ -9,7 +9,9 @@ dependencies = [
     "google-api-python-client",
     "python-dotenv",
     "aiosqlite",
-    "pytest"
+    "pytest",
+    "typer",
+    "pandas"
 ]
 
 
